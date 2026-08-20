@@ -46,7 +46,6 @@
             <button id="staff-switcher-toggle" onclick="document.getElementById('staff-switcher-panel').classList.toggle('hidden')"
                 class="w-10 h-10 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 shadow-md flex items-center justify-center text-slate-700 hover:bg-white/90 transition-all relative">
                 <i class="fa-solid fa-bars"></i>
-                <span id="admin-badge" class="hidden absolute -top-1 -right-1 bg-amber-500 text-slate-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full">鍵</span>
             </button>
             <nav id="staff-switcher-panel" class="hidden absolute right-0 mt-2 flex flex-col space-y-1 bg-white/80 backdrop-blur-sm p-1.5 rounded-xl shadow-lg border border-white/60 whitespace-nowrap">
                 <button id="btn-mode-display" onclick="switchView('display'); document.getElementById('staff-switcher-panel').classList.add('hidden');" 
@@ -56,6 +55,11 @@
                 <button id="btn-mode-admin" onclick="switchView('admin'); document.getElementById('staff-switcher-panel').classList.add('hidden');" 
                     class="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-100 relative text-left">
                     <i class="fa-solid fa-user-gear mr-1"></i>管理者
+                </button>
+                <div class="border-t border-slate-200 my-1"></div>
+                <button onclick="openSettingsModal(); document.getElementById('staff-switcher-panel').classList.add('hidden');" 
+                    class="px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-100 text-left">
+                    <i class="fa-solid fa-gear mr-1"></i>設定
                 </button>
             </nav>
         </div>
@@ -194,51 +198,11 @@
             </div>
         </section>
 
-        <!-- 3. ADMIN DASHBOARD VIEW (PASSWORD PROTECTED) -->
+        <!-- 3. ADMIN DASHBOARD VIEW -->
         <section id="view-admin" class="hidden max-w-6xl mx-auto w-full space-y-6">
-            
-            <!-- ADMIN LOGIN CONTAINER (Shown when unauthenticated) -->
-            <div id="admin-login-box" class="max-w-md mx-auto bg-white rounded-3xl shadow-xl p-8 border border-slate-200 text-center">
-                <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-700 text-2xl">
-                    <i class="fa-solid fa-lock"></i>
-                </div>
-                <h2 class="text-2xl font-bold text-slate-800 mb-2">管理者ログイン</h2>
-                <p class="text-xs text-slate-500 mb-6">設定されたパスワードを入力してください<br><span class="text-slate-400">（初期パスワード: <span class="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-bold">1234</span>）</span></p>
 
-                <form onsubmit="handleAdminLogin(event)" class="space-y-4">
-                    <div>
-                        <input type="password" id="admin-password-input" required placeholder="パスワードを入力"
-                            class="w-full text-center text-xl tracking-widest py-3 px-4 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-slate-800 focus:bg-white focus:outline-none transition-all">
-                    </div>
-                    <button type="submit" 
-                        class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl shadow-md transition-all">
-                        ログイン
-                    </button>
-                </form>
-            </div>
-
-            <!-- ADMIN DASHBOARD (Shown when authenticated) -->
-            <div id="admin-dashboard" class="hidden space-y-6">
-                
-                <!-- Admin Header Toolbar -->
-                <div class="bg-slate-900 text-white p-4 sm:p-6 rounded-3xl shadow-lg flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <div class="flex items-center space-x-3">
-                        <div class="bg-amber-500 text-slate-900 font-black px-3 py-1.5 rounded-xl text-xs uppercase tracking-wider">
-                            管理者モード
-                        </div>
-                        <span class="text-xs sm:text-sm text-slate-300">リアルタイム同期中</span>
-                    </div>
-
-                    <div class="flex items-center space-x-2">
-                        <button onclick="openSettingsModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-3 py-2 rounded-xl transition-all flex items-center space-x-1">
-                            <i class="fa-solid fa-gear"></i>
-                            <span>設定</span>
-                        </button>
-                        <button onclick="logoutAdmin()" class="bg-rose-950/60 hover:bg-rose-900 text-rose-200 text-xs font-bold px-3 py-2 rounded-xl border border-rose-800 transition-all">
-                            <i class="fa-solid fa-right-from-bracket mr-1"></i>ログアウト
-                        </button>
-                    </div>
-                </div>
+            <!-- ADMIN DASHBOARD -->
+            <div id="admin-dashboard" class="space-y-6">
 
                 <!-- Queue Control Grid -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -389,12 +353,6 @@
 
             <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-bold text-slate-600 mb-1">管理者パスワードの変更</label>
-                    <input type="password" id="setting-new-password" placeholder="新しいパスワード"
-                        class="w-full text-sm p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-800">
-                </div>
-
-                <div>
                     <label class="block text-xs font-bold text-slate-600 mb-1">1組あたりの平均待ち時間（分）</label>
                     <input type="number" id="setting-avg-time" min="1" max="60" value="10"
                         class="w-full text-sm p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-800">
@@ -427,8 +385,6 @@
         // Global State
         window.appState = {
             currentView: 'customer',
-            isAdminAuthenticated: false,
-            adminPassword: localStorage.getItem('queue_admin_pwd') || '1234',
             avgWaitPerParty: parseInt(localStorage.getItem('queue_avg_time') || '10'),
             enableSpeech: localStorage.getItem('queue_enable_speech') !== 'false',
             queueData: [],
@@ -545,7 +501,6 @@
                 document.getElementById('view-display').classList.remove('hidden');
             } else if (viewName === 'admin') {
                 document.getElementById('view-admin').classList.remove('hidden');
-                checkAdminAuthUI();
             }
 
             // Staff switcher (display <-> admin) only shows on those two views
@@ -620,7 +575,7 @@
             }
 
             // 3. Admin View Info
-            if (window.appState.isAdminAuthenticated) {
+            {
                 document.getElementById('admin-stat-waiting').innerText = waitingData.length;
                 document.getElementById('admin-stat-completed').innerText = completedData.length;
 
@@ -828,43 +783,6 @@
             document.getElementById('modal-success').classList.add('hidden');
         };
 
-        // Admin Authentication Logic
-        window.handleAdminLogin = function(e) {
-            e.preventDefault();
-            const pwdInput = document.getElementById('admin-password-input');
-            if (pwdInput.value === window.appState.adminPassword) {
-                window.appState.isAdminAuthenticated = true;
-                pwdInput.value = '';
-                checkAdminAuthUI();
-                showToast("管理者としてログインしました", "success");
-            } else {
-                showToast("パスワードが違います", "error");
-            }
-        };
-
-        window.logoutAdmin = function() {
-            window.appState.isAdminAuthenticated = false;
-            checkAdminAuthUI();
-            showToast("ログアウトしました", "info");
-        };
-
-        function checkAdminAuthUI() {
-            const loginBox = document.getElementById('admin-login-box');
-            const dashboard = document.getElementById('admin-dashboard');
-            const badge = document.getElementById('admin-badge');
-
-            if (window.appState.isAdminAuthenticated) {
-                loginBox.classList.add('hidden');
-                dashboard.classList.remove('hidden');
-                if (badge) badge.classList.remove('hidden');
-                renderAllViews();
-            } else {
-                loginBox.classList.remove('hidden');
-                dashboard.classList.add('hidden');
-                if (badge) badge.classList.add('hidden');
-            }
-        }
-
         // Call Customer
         // 音声アナウンスはここでは行わない（管理者画面の端末で鳴ってしまうため）。
         // 実際のアナウンスは renderAllViews() 内で、案内モニター画面(display)を
@@ -965,14 +883,8 @@
         };
 
         window.saveSettings = function() {
-            const newPwd = document.getElementById('setting-new-password').value.trim();
             const newAvgTime = parseInt(document.getElementById('setting-avg-time').value);
             const enableSpeech = document.getElementById('setting-speech-toggle').checked;
-
-            if (newPwd) {
-                window.appState.adminPassword = newPwd;
-                localStorage.setItem('queue_admin_pwd', newPwd);
-            }
 
             if (newAvgTime && newAvgTime > 0) {
                 window.appState.avgWaitPerParty = newAvgTime;
