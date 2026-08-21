@@ -410,7 +410,20 @@
                     <label class="block text-xs font-bold text-slate-600 mb-1">利用開始の目安人数（メモ・参考値）</label>
                     <input type="number" id="setting-threshold-count" min="1" max="99" value="5"
                         class="w-full text-sm p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-slate-800">
-                    <p class="text-[10px] text-slate-400 mt-1">この人数まで並んだら上のスイッチをONにしてください（自動判定ではありません）</p>
+                    <p class="text-[10px] text-slate-400 mt-1">この人数まで並んだらシステムを開始する目安です</p>
+                </div>
+
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                    <label class="block text-xs font-bold text-slate-700">今すぐ開始する（すでに並んでいる組数を登録）</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="number" id="setting-startup-count" min="1" max="99" value="5"
+                            class="flex-1 text-sm p-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-slate-800">
+                        <button onclick="startQueueSystemWithExisting()" 
+                            class="bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all whitespace-nowrap">
+                            この人数で開始
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-slate-400">番号札を持たない「既存の列」として自動登録し、システムをONにします</p>
                 </div>
 
                 <div>
@@ -631,6 +644,14 @@
             renderAllViews();
         };
 
+        // 事前登録（自動生成）された待ちエントリは番号札を持たないため、専用の表示にする
+        function ticketBadgeHtml(item, size = 'text-xl') {
+            if (item.isAuto) {
+                return `<span class="${size} font-black text-slate-500">既存の列</span>`;
+            }
+            return `<span class="${size} font-black text-slate-800">${item.ticketNum} <span class="text-xs font-normal text-slate-500">番</span></span>`;
+        }
+
         // Render UI Elements across all screens
         function renderAllViews() {
             const data = window.appState.queueData || [];
@@ -670,13 +691,16 @@
                     callingListEl.innerHTML = [...callingData].reverse().map(item => `
                         <div class="relative bg-white/15 border border-white/30 rounded-2xl px-5 py-3 sm:px-6 sm:py-4 text-center">
                             ${item.outOfOrder ? '<span class="absolute -top-2 -right-2 bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">順番前後</span>' : ''}
-                            <span class="text-5xl sm:text-7xl font-black tracking-tight">${item.ticketNum}</span>
-                            <span class="text-lg sm:text-xl font-bold ml-1">番</span>
+                            ${item.isAuto
+                                ? `<span class="text-2xl sm:text-3xl font-black tracking-tight">次のお客様</span>`
+                                : `<span class="text-5xl sm:text-7xl font-black tracking-tight">${item.ticketNum}</span><span class="text-lg sm:text-xl font-bold ml-1">番</span>`}
                         </div>
                     `).join('');
                     callingDetailEl.innerText = callingData.length > 1
                         ? `上記の番号札をお持ちのお客様はお呼び出し中です。受付までお越しください`
-                        : `番号札 ${callingData[0].ticketNum} 番 (${callingData[0].partySize}名様) お呼び出し中です`;
+                        : (callingData[0].isAuto
+                            ? `お待ちのお客様 (${callingData[0].partySize}名様) お呼び出し中です`
+                            : `番号札 ${callingData[0].ticketNum} 番 (${callingData[0].partySize}名様) お呼び出し中です`);
                 } else {
                     callingListEl.innerHTML = `<span class="text-5xl sm:text-7xl font-black tracking-tight">--</span>`;
                     callingDetailEl.innerText = "お呼び出し中の番号はありません";
@@ -694,7 +718,7 @@
                         <div class="flex items-center justify-between p-3 rounded-2xl ${index === 0 ? 'bg-sky-50 border border-sky-200' : 'bg-slate-50'}">
                             <div class="flex items-center space-x-3">
                                 <span class="w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center">${index + 1}</span>
-                                <span class="text-xl font-black text-slate-800">${item.ticketNum} <span class="text-xs font-normal text-slate-500">番</span></span>
+                                ${ticketBadgeHtml(item, 'text-xl')}
                             </div>
                             <span class="text-xs font-bold text-slate-600">${item.partySize} 名様</span>
                         </div>
@@ -718,7 +742,9 @@
                             <div class="bg-sky-50 border border-sky-200 p-3 rounded-2xl flex items-center justify-between">
                                 <div>
                                     <span class="text-xs font-bold text-sky-700 block">呼出中${item.outOfOrder ? ' <span class="text-rose-600">(順番前後)</span>' : ''}</span>
-                                    <span class="text-2xl font-black text-slate-800">${item.ticketNum} 番</span>
+                                    ${item.isAuto
+                                        ? `<span class="text-lg font-black text-slate-800">既存の列のお客様</span>`
+                                        : `<span class="text-2xl font-black text-slate-800">${item.ticketNum} 番</span>`}
                                     <span class="text-xs text-slate-500 ml-1">(${item.partySize}名)</span>
                                 </div>
                                 <button onclick="updateTicketStatus('${item.id}', 'completed')" 
@@ -741,7 +767,7 @@
                         adminQueueEl.innerHTML += `
                             <div class="grid grid-cols-12 gap-2 items-center bg-slate-50 hover:bg-slate-100 p-3 rounded-2xl border border-slate-200 transition-all">
                                 <div class="col-span-3 sm:col-span-3 text-lg font-black text-slate-800">
-                                    ${item.ticketNum} <span class="text-xs font-normal text-slate-500">番</span>
+                                    ${item.isAuto ? '<span class="text-sm font-bold text-slate-500">既存の列</span>' : `${item.ticketNum} <span class="text-xs font-normal text-slate-500">番</span>`}
                                 </div>
                                 <div class="col-span-3 sm:col-span-3 text-sm font-bold text-slate-700">
                                     ${item.partySize} 名
@@ -751,7 +777,7 @@
                                     <div class="text-[10px] text-amber-600 font-medium">経過: ${waitMinutes}分</div>
                                 </div>
                                 <div class="col-span-3 sm:col-span-3 flex items-center justify-end">
-                                    <button onclick="callCustomer('${item.id}', ${item.ticketNum})" 
+                                    <button onclick="callCustomer('${item.id}', ${item.isAuto ? 'null' : item.ticketNum})" 
                                         class="bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm transition-all flex items-center space-x-1">
                                         <i class="fa-solid fa-bullhorn"></i>
                                         <span>呼び出し</span>
@@ -774,7 +800,7 @@
                             adminCompletedEl.innerHTML += `
                                 <div class="grid grid-cols-12 gap-2 items-center bg-sky-50/50 p-2.5 rounded-2xl border border-sky-100 text-xs">
                                     <div class="col-span-3 font-bold text-slate-800">
-                                        ${item.ticketNum} 番
+                                        ${item.isAuto ? '既存の列' : `${item.ticketNum} 番`}
                                     </div>
                                     <div class="col-span-3 font-medium text-slate-700">
                                         ${item.partySize} 名
@@ -1066,7 +1092,8 @@
             ));
 
             await window.updateTicketStatus(id, 'calling', { outOfOrder });
-            showToast(`${ticketNum} 番様を呼び出しました${outOfOrder ? '（順番前後）' : ''}`, "info");
+            const label = (target && target.isAuto) ? '既存の列のお客様' : `${ticketNum} 番様`;
+            showToast(`${label}を呼び出しました${outOfOrder ? '（順番前後）' : ''}`, "info");
         };
 
         // 案内モニター画面でのみ音声アナウンスを再生する
@@ -1087,7 +1114,9 @@
                 const orderNotice = item.outOfOrder
                     ? '順番が前後いたしますが、'
                     : '';
-                const text = `${orderNotice}番号札 ${item.ticketNum} 番でお待ちのお客様、お待たせいたしました。受付までお越しください。`;
+                const text = item.isAuto
+                    ? `${orderNotice}お待ちのお客様、お待たせいたしました。受付までお越しください。`
+                    : `${orderNotice}番号札 ${item.ticketNum} 番でお待ちのお客様、お待たせいたしました。受付までお越しください。`;
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'ja-JP';
                 utterance.rate = 0.9;
@@ -1162,11 +1191,58 @@
             document.getElementById('setting-speech-toggle').checked = window.appState.enableSpeech;
             document.getElementById('setting-system-enabled').checked = window.appState.systemEnabled;
             document.getElementById('setting-threshold-count').value = window.appState.thresholdCount;
+            document.getElementById('setting-startup-count').value = window.appState.thresholdCount;
             document.getElementById('modal-settings').classList.remove('hidden');
         };
 
         window.closeSettingsModal = function() {
             document.getElementById('modal-settings').classList.add('hidden');
+        };
+
+        // すでに並んでいる人数分の「番号札を持たない待ち」を自動登録してシステムを開始する
+        window.startQueueSystemWithExisting = async function() {
+            const countInput = document.getElementById('setting-startup-count');
+            const count = parseInt(countInput.value);
+
+            if (!count || count <= 0) {
+                showToast("開始時点の待ち人数を入力してください", "error");
+                return;
+            }
+
+            try {
+                const baseTicketNum = 900000 + (Date.now() % 100000);
+                const now = Date.now();
+
+                for (let i = 0; i < count; i++) {
+                    const newItem = {
+                        ticketNum: baseTicketNum + i,
+                        partySize: 1,
+                        status: 'waiting',
+                        createdAt: now - (count - i) * 1000, // 既存の列が先頭に来るよう、少しずつ過去の時刻にする
+                        qrClaimed: true, // 番号札がないため、この項目にQRコードでの追跡は行わない
+                        isAuto: true
+                    };
+
+                    if (isOnlineFirebase && db) {
+                        await addDoc(getCollectionRef(), newItem);
+                    } else {
+                        newItem.id = 'mem_auto_' + now + '_' + i;
+                        window.appState.queueData.push(newItem);
+                    }
+                }
+
+                // システムを有効化
+                window.appState.systemEnabled = true;
+                localStorage.setItem('queue_system_enabled', 'true');
+                document.getElementById('setting-system-enabled').checked = true;
+                saveSharedSettings({ systemEnabled: true });
+
+                renderAllViews();
+                showToast(`既存の待ち ${count} 組を登録し、システムを開始しました`, "success");
+            } catch (err) {
+                console.error("Failed to seed existing queue:", err);
+                showToast("既存の待ちの登録に失敗しました", "error");
+            }
         };
 
         window.saveSettings = function() {
