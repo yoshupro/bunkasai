@@ -159,15 +159,17 @@
         <!-- 1b. INDIVIDUAL TICKET STATUS VIEW (opened via QR code) -->
         <section id="view-status" class="hidden max-w-md mx-auto w-full bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden border border-slate-200">
             <div class="p-6 sm:p-8 text-center">
-                <p class="text-xs text-slate-400 font-bold mb-1">あなたの受付番号</p>
-                <p class="text-6xl font-black text-sky-500 mb-1"><span id="status-ticket-num">--</span><span class="text-xl text-slate-700 ml-1">番</span></p>
-                <p class="text-xs text-slate-500 mb-6"><span id="status-party-size">0</span> 名様</p>
+                <div id="status-ticket-block">
+                    <p class="text-xs text-slate-400 font-bold mb-1">あなたの受付番号</p>
+                    <p class="text-6xl font-black text-sky-500 mb-1"><span id="status-ticket-num">--</span><span class="text-xl text-slate-700 ml-1">番</span></p>
+                    <p class="text-xs text-slate-500 mb-6"><span id="status-party-size">0</span> 名様</p>
+                </div>
 
                 <div id="status-body">
                     <!-- Populated dynamically: waiting / calling / completed / not-found states -->
                 </div>
 
-                <p class="text-[11px] text-slate-400 mt-6">この画面は自動的に最新の状態に更新されます</p>
+                <p id="status-footer-note" class="text-[11px] text-slate-400 mt-6">この画面は自動的に最新の状態に更新されます</p>
             </div>
         </section>
 
@@ -701,10 +703,14 @@
             const numEl = document.getElementById('status-ticket-num');
             const partyEl = document.getElementById('status-party-size');
             const bodyEl = document.getElementById('status-body');
+            const ticketBlockEl = document.getElementById('status-ticket-block');
+            const footerNoteEl = document.getElementById('status-footer-note');
             if (!numEl || !bodyEl) return;
 
             const trackedId = window.appState.trackedTicketId;
             if (!trackedId) {
+                if (ticketBlockEl) ticketBlockEl.classList.remove('hidden');
+                if (footerNoteEl) footerNoteEl.classList.remove('hidden');
                 numEl.innerText = '--';
                 partyEl.innerText = '0';
                 bodyEl.innerHTML = `<p class="text-sm text-slate-500">受付情報が見つかりません</p>`;
@@ -714,28 +720,33 @@
             const item = data.find(i => i.id === trackedId);
 
             if (!item) {
+                if (ticketBlockEl) ticketBlockEl.classList.remove('hidden');
+                if (footerNoteEl) footerNoteEl.classList.remove('hidden');
                 numEl.innerText = '--';
                 partyEl.innerText = '0';
                 bodyEl.innerHTML = `<p class="text-sm text-slate-500">この受付情報が見つかりませんでした</p>`;
                 return;
             }
 
-            numEl.innerText = item.ticketNum;
-            partyEl.innerText = item.partySize;
-
             // 一度別の端末で読み取られたQRコードは、以後閲覧できないようにする
             const localClaimKey = `qr_claimed_${trackedId}`;
             const claimedOnThisDevice = localStorage.getItem(localClaimKey) === '1';
 
             if (item.qrClaimed && !claimedOnThisDevice) {
+                if (ticketBlockEl) ticketBlockEl.classList.add('hidden');
+                if (footerNoteEl) footerNoteEl.classList.add('hidden');
                 bodyEl.innerHTML = `
                     <div class="bg-slate-100 text-slate-600 rounded-2xl p-6">
                         <p class="text-sm font-bold">このQRコードはすでに使用されています</p>
-                        <p class="text-xs mt-1">最初に読み取った端末でのみご確認いただけます</p>
                     </div>
                 `;
                 return;
             }
+
+            if (ticketBlockEl) ticketBlockEl.classList.remove('hidden');
+            if (footerNoteEl) footerNoteEl.classList.remove('hidden');
+            numEl.innerText = item.ticketNum;
+            partyEl.innerText = item.partySize;
 
             if (!item.qrClaimed) {
                 localStorage.setItem(localClaimKey, '1');
