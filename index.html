@@ -408,6 +408,8 @@
         window.appState = {
             currentView: 'customer',
             trackedTicket: null,
+            trackedTicketId: null,
+            successModalTimer: null,
             avgWaitPerParty: parseInt(localStorage.getItem('queue_avg_time') || '10'),
             enableSpeech: localStorage.getItem('queue_enable_speech') !== 'false',
             queueData: [],
@@ -701,27 +703,44 @@
             const bodyEl = document.getElementById('status-body');
             if (!numEl || !bodyEl) return;
 
-            const trackedNum = window.appState.trackedTicket;
-            if (!trackedNum) {
+            const trackedId = window.appState.trackedTicketId;
+            if (!trackedId) {
                 numEl.innerText = '--';
                 partyEl.innerText = '0';
-                bodyEl.innerHTML = `<p class="text-sm text-slate-500">受付番号の情報が見つかりません</p>`;
+                bodyEl.innerHTML = `<p class="text-sm text-slate-500">受付情報が見つかりません</p>`;
                 return;
             }
 
-            numEl.innerText = trackedNum;
-
-            // Find the most recent entry matching this ticket number (in case of re-use across the day)
-            const matches = data.filter(item => item.ticketNum === trackedNum);
-            const item = matches.length > 0 ? matches[matches.length - 1] : null;
+            const item = data.find(i => i.id === trackedId);
 
             if (!item) {
+                numEl.innerText = '--';
                 partyEl.innerText = '0';
-                bodyEl.innerHTML = `<p class="text-sm text-slate-500">この番号の受付情報が見つかりませんでした</p>`;
+                bodyEl.innerHTML = `<p class="text-sm text-slate-500">この受付情報が見つかりませんでした</p>`;
                 return;
             }
 
+            numEl.innerText = item.ticketNum;
             partyEl.innerText = item.partySize;
+
+            // 一度別の端末で読み取られたQRコードは、以後閲覧できないようにする
+            const localClaimKey = `qr_claimed_${trackedId}`;
+            const claimedOnThisDevice = localStorage.getItem(localClaimKey) === '1';
+
+            if (item.qrClaimed && !claimedOnThisDevice) {
+                bodyEl.innerHTML = `
+                    <div class="bg-slate-100 text-slate-600 rounded-2xl p-6">
+                        <p class="text-sm font-bold">このQRコードはすでに使用されています</p>
+                        <p class="text-xs mt-1">最初に読み取った端末でのみご確認いただけます</p>
+                    </div>
+                `;
+                return;
+            }
+
+            if (!item.qrClaimed) {
+                localStorage.setItem(localClaimKey, '1');
+                markQrClaimed(trackedId);
+            }
 
             if (item.status === 'waiting') {
                 // Position = how many waiting tickets were created before this one, +1
@@ -840,14 +859,18 @@
                 ticketNum: ticketNum,
                 partySize: partySize,
                 status: 'waiting', // 'waiting', 'calling', 'completed', 'cancelled'
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                qrClaimed: false
             };
 
             try {
+                let newId;
                 if (isOnlineFirebase && db) {
-                    await addDoc(getCollectionRef(), newItem);
+                    const docRef = await addDoc(getCollectionRef(), newItem);
+                    newId = docRef.id;
                 } else {
-                    newItem.id = 'mem_' + Date.now();
+                    newId = 'mem_' + Date.now();
+                    newItem.id = newId;
                     window.appState.queueData.push(newItem);
                     renderAllViews();
                 }
@@ -855,8 +878,9 @@
                 // Show Success Modal
                 document.getElementById('modal-success-num').innerText = ticketNum;
                 document.getElementById('modal-success-party').innerText = partySize;
-                renderSuccessQrCode(ticketNum);
+                renderSuccessQrCode(newId);
                 document.getElementById('modal-success').classList.remove('hidden');
+                scheduleSuccessModalAutoClose();
 
                 // Reset Form
                 ticketInput.value = '';
@@ -883,15 +907,30 @@
 
         window.closeSuccessModal = function() {
             document.getElementById('modal-success').classList.add('hidden');
+            if (window.appState.successModalTimer) {
+                clearTimeout(window.appState.successModalTimer);
+                window.appState.successModalTimer = null;
+            }
         };
 
-        // Generate a QR code linking to this ticket's live status page
-        function renderSuccessQrCode(ticketNum) {
+        // 受付完了表示は35秒間だけ表示し、その後自動的に閉じる
+        function scheduleSuccessModalAutoClose() {
+            if (window.appState.successModalTimer) {
+                clearTimeout(window.appState.successModalTimer);
+            }
+            window.appState.successModalTimer = setTimeout(() => {
+                document.getElementById('modal-success').classList.add('hidden');
+                window.appState.successModalTimer = null;
+            }, 35000);
+        }
+
+        // Generate a QR code linking to this ticket's live status page (identified by its unique id)
+        function renderSuccessQrCode(ticketId) {
             const container = document.getElementById('modal-success-qr');
             if (!container) return;
             container.innerHTML = '';
 
-            const statusUrl = `${window.location.origin}${window.location.pathname}?view=status&ticket=${ticketNum}`;
+            const statusUrl = `${window.location.origin}${window.location.pathname}?view=status&id=${encodeURIComponent(ticketId)}`;
 
             if (typeof QRCode !== 'undefined') {
                 new QRCode(container, {
@@ -970,6 +1009,23 @@
                 showToast("更新に失敗しました", "error");
             }
         };
+
+        // Mark a ticket's QR code as claimed (used once), without touching its status
+        async function markQrClaimed(id) {
+            try {
+                if (isOnlineFirebase && db) {
+                    const ticketDoc = doc(db, 'artifacts', window.appState.appId, 'public', 'data', 'queue_list', id);
+                    await updateDoc(ticketDoc, { qrClaimed: true });
+                } else {
+                    const item = window.appState.queueData.find(i => i.id === id);
+                    if (item) {
+                        item.qrClaimed = true;
+                    }
+                }
+            } catch (err) {
+                console.error("QR claim update error:", err);
+            }
+        }
 
         // Clear All Data
         window.clearAllQueuePrompt = async function() {
@@ -1054,13 +1110,13 @@
         window.addEventListener('DOMContentLoaded', () => {
             initApp();
             // URLパラメータで初期表示画面を指定できるようにする
-            // 例: index.html?view=display / ?view=admin / ?view=customer / ?view=status&ticket=12
+            // 例: index.html?view=display / ?view=admin / ?view=customer / ?view=status&id=xxxx
             const params = new URLSearchParams(window.location.search);
             const requestedView = params.get('view');
-            const requestedTicket = params.get('ticket');
+            const requestedId = params.get('id');
 
-            if (requestedTicket) {
-                window.appState.trackedTicket = parseInt(requestedTicket);
+            if (requestedId) {
+                window.appState.trackedTicketId = requestedId;
             }
 
             if (requestedView && ['customer', 'display', 'admin', 'status'].includes(requestedView)) {
