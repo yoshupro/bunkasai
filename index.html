@@ -6,6 +6,7 @@
     <title>2−2アリスの秘密のお茶会</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -152,6 +153,21 @@
                         <i class="fa-solid fa-arrow-right"></i>
                     </button>
                 </form>
+            </div>
+        </section>
+
+        <!-- 1b. INDIVIDUAL TICKET STATUS VIEW (opened via QR code) -->
+        <section id="view-status" class="hidden max-w-md mx-auto w-full bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden border border-slate-200">
+            <div class="p-6 sm:p-8 text-center">
+                <p class="text-xs text-slate-400 font-bold mb-1">あなたの受付番号</p>
+                <p class="text-6xl font-black text-sky-500 mb-1"><span id="status-ticket-num">--</span><span class="text-xl text-slate-700 ml-1">番</span></p>
+                <p class="text-xs text-slate-500 mb-6"><span id="status-party-size">0</span> 名様</p>
+
+                <div id="status-body">
+                    <!-- Populated dynamically: waiting / calling / completed / not-found states -->
+                </div>
+
+                <p class="text-[11px] text-slate-400 mt-6">この画面は自動的に最新の状態に更新されます</p>
             </div>
         </section>
 
@@ -305,6 +321,11 @@
                 <p class="text-xs text-slate-500 mt-2"><span id="modal-success-party">0</span> 名様</p>
             </div>
 
+            <div class="bg-white border border-slate-200 rounded-2xl p-4">
+                <p class="text-xs text-slate-500 font-bold mb-3">このQRコードを読み取ると<br>待ち状況をいつでも確認できます</p>
+                <div id="modal-success-qr" class="flex items-center justify-center"></div>
+            </div>
+
             <button onclick="closeSuccessModal()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all">
                 閉じる
             </button>
@@ -386,6 +407,7 @@
         // Global State
         window.appState = {
             currentView: 'customer',
+            trackedTicket: null,
             avgWaitPerParty: parseInt(localStorage.getItem('queue_avg_time') || '10'),
             enableSpeech: localStorage.getItem('queue_enable_speech') !== 'false',
             queueData: [],
@@ -479,6 +501,7 @@
 
             // Hide all sections
             document.getElementById('view-customer').classList.add('hidden');
+            document.getElementById('view-status').classList.add('hidden');
             document.getElementById('view-display').classList.add('hidden');
             document.getElementById('view-admin').classList.add('hidden');
 
@@ -498,6 +521,8 @@
 
             if (viewName === 'customer') {
                 document.getElementById('view-customer').classList.remove('hidden');
+            } else if (viewName === 'status') {
+                document.getElementById('view-status').classList.remove('hidden');
             } else if (viewName === 'display') {
                 document.getElementById('view-display').classList.remove('hidden');
             } else if (viewName === 'admin') {
@@ -531,6 +556,9 @@
             // 1. Customer View Info
             document.getElementById('cust-waiting-count').innerText = waitingData.length;
             document.getElementById('cust-estimated-time').innerText = `約 ${waitingData.length * window.appState.avgWaitPerParty}`;
+
+            // 1b. Individual Ticket Status View (opened via QR code)
+            renderStatusView(data, waitingData);
 
             // 2. Display View Info
             document.getElementById('disp-waiting-count').innerText = waitingData.length;
@@ -666,7 +694,79 @@
             }
         }
 
-        // Hide the ticket confirmation modal (e.g. when the customer edits the ticket number again, or cancels)
+        // Render the individual ticket status view (shown when a customer scans their QR code)
+        function renderStatusView(data, waitingData) {
+            const numEl = document.getElementById('status-ticket-num');
+            const partyEl = document.getElementById('status-party-size');
+            const bodyEl = document.getElementById('status-body');
+            if (!numEl || !bodyEl) return;
+
+            const trackedNum = window.appState.trackedTicket;
+            if (!trackedNum) {
+                numEl.innerText = '--';
+                partyEl.innerText = '0';
+                bodyEl.innerHTML = `<p class="text-sm text-slate-500">受付番号の情報が見つかりません</p>`;
+                return;
+            }
+
+            numEl.innerText = trackedNum;
+
+            // Find the most recent entry matching this ticket number (in case of re-use across the day)
+            const matches = data.filter(item => item.ticketNum === trackedNum);
+            const item = matches.length > 0 ? matches[matches.length - 1] : null;
+
+            if (!item) {
+                partyEl.innerText = '0';
+                bodyEl.innerHTML = `<p class="text-sm text-slate-500">この番号の受付情報が見つかりませんでした</p>`;
+                return;
+            }
+
+            partyEl.innerText = item.partySize;
+
+            if (item.status === 'waiting') {
+                // Position = how many waiting tickets were created before this one, +1
+                const sorted = [...waitingData].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                const position = sorted.findIndex(w => w.id === item.id);
+                const aheadCount = position >= 0 ? position : 0;
+                const estWait = (aheadCount + 1) * window.appState.avgWaitPerParty;
+
+                bodyEl.innerHTML = `
+                    <div class="bg-sky-50 border border-sky-200 rounded-2xl p-5 space-y-3">
+                        <div>
+                            <p class="text-xs text-slate-500 font-bold mb-0.5">現在の待ち組数（あなたより前）</p>
+                            <p class="text-3xl font-black text-sky-600">${aheadCount} <span class="text-sm font-bold text-slate-500">組</span></p>
+                        </div>
+                        <div class="border-t border-sky-200 pt-3">
+                            <p class="text-xs text-slate-500 font-bold mb-0.5">予想待ち時間</p>
+                            <p class="text-3xl font-black text-sky-600">約 ${estWait} <span class="text-sm font-bold text-slate-500">分</span></p>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-4">お呼び出しまでお近くでお待ちください</p>
+                `;
+            } else if (item.status === 'calling') {
+                bodyEl.innerHTML = `
+                    <div class="bg-sky-500 text-white rounded-2xl p-6 space-y-2">
+                        <p class="text-lg font-black">ただいまお呼び出し中です！</p>
+                        <p class="text-sm">スタッフまでお越しください</p>
+                    </div>
+                `;
+            } else if (item.status === 'completed') {
+                bodyEl.innerHTML = `
+                    <div class="bg-slate-100 text-slate-600 rounded-2xl p-6">
+                        <p class="text-sm font-bold">受付は完了しています</p>
+                        <p class="text-xs mt-1">ご利用ありがとうございました</p>
+                    </div>
+                `;
+            } else if (item.status === 'cancelled') {
+                bodyEl.innerHTML = `
+                    <div class="bg-slate-100 text-slate-600 rounded-2xl p-6">
+                        <p class="text-sm font-bold">この受付はキャンセルされました</p>
+                    </div>
+                `;
+            }
+        }
+
+
         window.hideTicketConfirmation = function() {
             document.getElementById('modal-ticket-confirm').classList.add('hidden');
         };
@@ -755,6 +855,7 @@
                 // Show Success Modal
                 document.getElementById('modal-success-num').innerText = ticketNum;
                 document.getElementById('modal-success-party').innerText = partySize;
+                renderSuccessQrCode(ticketNum);
                 document.getElementById('modal-success').classList.remove('hidden');
 
                 // Reset Form
@@ -783,6 +884,27 @@
         window.closeSuccessModal = function() {
             document.getElementById('modal-success').classList.add('hidden');
         };
+
+        // Generate a QR code linking to this ticket's live status page
+        function renderSuccessQrCode(ticketNum) {
+            const container = document.getElementById('modal-success-qr');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const statusUrl = `${window.location.origin}${window.location.pathname}?view=status&ticket=${ticketNum}`;
+
+            if (typeof QRCode !== 'undefined') {
+                new QRCode(container, {
+                    text: statusUrl,
+                    width: 160,
+                    height: 160,
+                    colorDark: "#0f172a",
+                    colorLight: "#ffffff"
+                });
+            } else {
+                container.innerHTML = `<p class="text-xs text-slate-400">QRコードを読み込めませんでした</p>`;
+            }
+        }
 
         // Call Customer
         // 音声アナウンスはここでは行わない（管理者画面の端末で鳴ってしまうため）。
@@ -932,10 +1054,16 @@
         window.addEventListener('DOMContentLoaded', () => {
             initApp();
             // URLパラメータで初期表示画面を指定できるようにする
-            // 例: index.html?view=display / ?view=admin / ?view=customer
+            // 例: index.html?view=display / ?view=admin / ?view=customer / ?view=status&ticket=12
             const params = new URLSearchParams(window.location.search);
             const requestedView = params.get('view');
-            if (requestedView && ['customer', 'display', 'admin'].includes(requestedView)) {
+            const requestedTicket = params.get('ticket');
+
+            if (requestedTicket) {
+                window.appState.trackedTicket = parseInt(requestedTicket);
+            }
+
+            if (requestedView && ['customer', 'display', 'admin', 'status'].includes(requestedView)) {
                 switchView(requestedView);
             }
         });
