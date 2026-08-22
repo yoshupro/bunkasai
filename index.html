@@ -83,25 +83,24 @@
         <section id="view-customer" class="relative z-20 max-w-2xl mx-auto w-full bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl overflow-hidden border border-slate-200">
             <!-- Shown when the queue system is enabled -->
             <div id="customer-system-on">
-                <!-- Header Banner -->
-                <div class="bg-gradient-to-r from-sky-500 to-sky-300 p-6 text-white text-center">
-                    <p class="text-sky-100 font-medium mb-1 text-sm sm:text-base">いらっしゃいませ</p>
-                    <h2 class="text-2xl sm:text-3xl font-extrabold tracking-wide">番号札の登録と人数入力</h2>
-                    <p class="text-xs sm:text-sm text-sky-100 mt-2">横にある番号札をお取りいただき、こちらに入力してください</p>
+                <!-- Header Banner (compact) -->
+                <div class="bg-gradient-to-r from-sky-500 to-sky-300 py-3 px-6 text-white text-center">
+                    <h2 class="text-base sm:text-lg font-bold tracking-wide">番号札の登録と人数入力</h2>
+                    <p class="text-[11px] sm:text-xs text-sky-100 mt-0.5">横にある番号札をお取りいただき、こちらに入力してください</p>
                 </div>
 
                 <div class="p-6 sm:p-8 space-y-6">
                     <!-- Current Wait Info Summary -->
-                    <div class="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center">
+                    <div class="flex justify-between items-center bg-slate-50 p-5 sm:p-6 rounded-2xl border border-slate-200 text-center">
                         <div class="w-1/2 border-r border-slate-200 pr-2">
-                            <span class="text-xs text-slate-500 font-bold block mb-0.5">現在の待ち組数</span>
-                            <span id="cust-waiting-count" class="text-2xl sm:text-3xl font-black text-sky-500">0</span>
-                            <span class="text-xs text-slate-600 ml-1">組</span>
+                            <span class="text-xs text-slate-500 font-bold block mb-1">現在の待ち組数</span>
+                            <span id="cust-waiting-count" class="text-5xl sm:text-6xl font-black text-sky-500">0</span>
+                            <span class="text-sm text-slate-600 ml-1">組</span>
                         </div>
                         <div class="w-1/2 pl-2">
-                            <span class="text-xs text-slate-500 font-bold block mb-0.5">目安の待ち時間</span>
-                            <span id="cust-estimated-time" class="text-2xl sm:text-3xl font-black text-slate-700">約 0</span>
-                            <span class="text-xs text-slate-600 ml-1">分</span>
+                            <span class="text-xs text-slate-500 font-bold block mb-1">目安の待ち時間</span>
+                            <span id="cust-estimated-time" class="text-5xl sm:text-6xl font-black text-slate-700">約 0</span>
+                            <span class="text-sm text-slate-600 ml-1">分</span>
                         </div>
                     </div>
 
@@ -739,13 +738,17 @@
                 dispListEl.innerHTML = `<p class="text-center text-slate-400 py-8 text-sm">現在待ちのお客様はいらっしゃいません</p>`;
             } else {
                 waitingData.slice(0, 8).forEach((item, index) => {
+                    const estWaitForItem = (index + 1) * window.appState.avgWaitPerParty;
                     dispListEl.innerHTML += `
                         <div class="flex items-center justify-between p-3 rounded-2xl ${index === 0 ? 'bg-sky-50 border border-sky-200' : 'bg-slate-50'}">
                             <div class="flex items-center space-x-3">
                                 <span class="w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center">${index + 1}</span>
                                 ${ticketBadgeHtml(item, 'text-xl')}
                             </div>
-                            <span class="text-xs font-bold text-slate-600">${item.partySize} 名様</span>
+                            <div class="flex items-center space-x-3">
+                                <span class="text-xs font-bold text-slate-600">${item.partySize} 名様</span>
+                                <span class="text-xs font-bold text-sky-600 bg-sky-100 px-2 py-1 rounded-full whitespace-nowrap">目安 約${estWaitForItem}分</span>
+                            </div>
                         </div>
                     `;
                 });
